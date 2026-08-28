@@ -1029,8 +1029,18 @@ function loadFromFirebase(uid) {
   if (cached && Object.values(cached).some(a => Array.isArray(a) && a.length > 0)) { DB = cached; initApp(); }
   // Path global agar semua akun membaca/menulis ke gudang data yang sama persis
   const dbRef = window._fbRef(window._fbDatabase, `shared_store/data`);
-  if (fbListener) window._fbOff(fbListener);
+  if (fbListener) { try { fbListener(); } catch(e){} }
+  
+  // Timeout warning jika koneksi macet
+  const loadingTimer = setTimeout(() => {
+    if(document.getElementById('syncLabel')?.textContent === 'Memuat...') {
+      setSyncStatus('error','Koneksi Terhambat');
+      toast('Koneksi ke server Firebase terhambat (mungkin diblokir jaringan).','error');
+    }
+  }, 10000);
+
   fbListener = window._fbOnValue(dbRef, snapshot => {
+    clearTimeout(loadingTimer);
     const data = snapshot.val();
     if (data) {
       DB = { ...emptyDB(), ...data };
@@ -1040,14 +1050,14 @@ function loadFromFirebase(uid) {
       saveLocal();
       initApp(); setSyncStatus('synced','Tersimpan ☁️');
     } else {
-      // Jika cloud kosong, tapi lokal ada datanya, upload data lokal ke cloud pusat
       if (cached && Object.values(cached).some(a => Array.isArray(a) && a.length > 0)) {
         saveToFirebase();
       }
       initApp(); setSyncStatus('synced','Tersimpan ☁️');
     }
   }, err => {
-    setSyncStatus('error','Error Sync'); toast('Gagal memuat dari cloud. Menggunakan data lokal.','warning');
+    clearTimeout(loadingTimer);
+    setSyncStatus('error','Error Sync'); toast('Gagal memuat dari cloud. Cek aturan Firebase Database Anda.','warning');
     DB = loadLocal(); initApp();
   });
 }
